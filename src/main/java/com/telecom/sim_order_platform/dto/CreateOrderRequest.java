@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record CreateOrderRequest(
 
-        @NotBlank
+        @NotBlank(message = "Customer ID is required")
         String customerId,
         @NotBlank
         String simType,
