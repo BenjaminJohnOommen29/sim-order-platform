@@ -37,4 +37,13 @@ public class OrderController {
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+
+    @PostMapping("/{orderId}/reserve-inventory")
+    public ResponseEntity<OrderResponse> reserveInventory(@PathVariable String orderId) {
+
+        return orderService.reserveInventory(orderId)
+                .map(ResponseEntity::ok)
+                .orElseGet(()-> ResponseEntity.notFound().build());
+    }
 }

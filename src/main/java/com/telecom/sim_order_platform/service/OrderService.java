@@ -50,4 +50,24 @@ public class OrderService {
                         order.status()
                 ));
     }
+
+
+    public Optional<OrderResponse> reserveInventory(String orderId) {
+        return orderRepository.findById(orderId)
+                .map(order -> {
+                    SimOrder updatedOrder = order.markInventoryReserved();
+
+                    orderRepository.save(updatedOrder);
+                    //Our ConcurrentHashMap repository replaces the value stored under the same order ID when we call save(updatedOrder).
+
+                    return new OrderResponse(
+                            updatedOrder.orderId(),
+                            updatedOrder.customerId(),
+                            updatedOrder.simType(),
+                            updatedOrder.planCode(),
+                            updatedOrder.status()
+                    );
+                });
+    }
+
 }

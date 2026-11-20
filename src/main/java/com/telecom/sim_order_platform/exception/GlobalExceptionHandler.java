@@ -24,4 +24,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
     }
 
+
+    @ExceptionHandler(InvalidOrderStateTransitionException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidOrderStateTransition(
+            InvalidOrderStateTransitionException ex) {
+
+        Map<String, String> error = Map.of(
+                "error", "INVALID_ORDER_STATE_TRANSITION",
+                "message", ex.getMessage()
+        );
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+
 }

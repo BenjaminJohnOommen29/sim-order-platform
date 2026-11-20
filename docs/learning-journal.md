@@ -225,3 +225,308 @@ Later, we'll replace in-memory storage with PostgreSQL and Spring Data JPA.
 - Method references and `Optional.map()`.
 - HTTP 200 vs 201 vs 400 vs 404.
 - Why in-memory storage is unsuitable for durable production data.
+## Sprint 1 — Unit Testing with JUnit and Mockito
+
+### Key concepts learned
+
+**JUnit:** Provides `@Test` and assertions such as `assertEquals()` and `assertTrue()`.
+
+**Mockito:** Creates mock dependencies, configures their behavior, and verifies interactions.
+
+- `@ExtendWith(MockitoExtension.class)` integrates Mockito with JUnit.
+- `@Mock` creates a mock repository.
+- `@InjectMocks` constructs the service and injects its mocked dependencies.
+
+**Arrange–Act–Assert:** Organizes tests into setup, execution, and verification.
+
+
+### Troubleshooting lessons
+
+- Maven initially ran with Java 8 instead of Java 21, preventing Java records from compiling.
+- Switching `JAVA_HOME` and `PATH` to Java 21 resolved the compilation issue.
+- IntelliJ IDEA 2023.3.4's method-level JUnit runner encountered a compatibility error with JUnit 6.
+- Running tests through Maven Surefire worked successfully.
+
+### Interview takeaways
+
+- Unit tests should isolate business logic from infrastructure.
+- Assertions verify returned results; Mockito verification checks interactions with dependencies.
+- Stubbing allows deterministic testing of success and failure scenarios.
+
+
+## Mock vs Real Repository — Testing Insights
+
+### 1. Comparing test approaches
+
+| | Mockito unit test | Service + repository test |
+|---|---|---|
+| `OrderService` | Real | Real |
+| `InMemoryOrderRepository` | Mock | Real |
+| `save()` | Records the call | Executes `Map.put()` |
+| `findById()` | Returns stubbed/default value | Executes `Map.get()` |
+| Data actually stored? | ❌ No | ✅ Yes |
+| Spring Boot context? | ❌ No | ❌ No |
+
+### 2. How the two approaches work
+
+**With Mockito**
+
+```text
+OrderService.createOrder()
+         |
+         v
+MockRepository.save(order)
+         |
+         v
+Records interaction only
+(No ConcurrentHashMap update)
+```
+
+**With a real repository**
+
+```text
+OrderService.createOrder()
+         |
+         v
+RealRepository.save(order)
+         |
+         v
+ConcurrentHashMap.put(id, order)
+         |
+         v
+RealRepository.findById(id)
+         |
+         v
+Order successfully retrieved
+```
+
+### 3. Key annotations and methods
+
+| Feature | Purpose |
+|---|---|
+| `@Mock` | Creates a fake dependency |
+| `@InjectMocks` | Injects mocks into a real object |
+| `when().thenReturn()` | Defines mock behavior |
+| `verify().save(expectedOrder)` | Checks the argument passed to `save()` |
+| `ArgumentCaptor` | Captures arguments for inspection |
+| `assertEquals()` | Checks actual vs expected values |
+
+### 4. Why no stubbing for `createOrder()`?
+
+`OrderService` is real, so its method executes normally:
+
+`Request → SimOrder → save() → CreateOrderResponse`
+
+The response is **constructed by the service**, not returned by the repository.
+
+### 5. Test organization
+
+```text
+src/test/java/.../
+  service/
+    OrderServiceTest.java
+       → Mockito unit tests
+
+    OrderServiceRepositoryTest.java
+       → Real service + real repository
+
+  SimOrderPlatformApplicationTests.java
+       → Spring context startup test
+```
+
+**Interview takeaway:** Mock tests verify isolated behavior and interactions. Tests using real collaborators verify that components work together. A verified mock `save()` call does not prove data was stored.
+
+
+## Sprint 1 — Immutability and Domain State Transitions
+
+### 1. State Transitions in Domain Models
+
+A **state transition** represents a valid change from one business state to another.
+
+Instead of allowing unrestricted status updates, domain methods enforce permitted transitions.
+
+```java
+public SimOrder markInventoryReserved() {
+    if (status != OrderStatus.CREATED) {
+        throw new InvalidOrderStateTransitionException(
+            "Invalid order state: " + status
+        );
+    }
+
+    return new SimOrder(
+        orderId, customerId, simType, planCode,
+        OrderStatus.INVENTORY_RESERVED
+    );
+}
+```
+
+- Business rules remain inside the domain model.
+- Invalid transitions are rejected explicitly.
+- Immutable records return a new instance rather than modifying existing state.
+- A Java record has no automatically generated `copy()` method, unlike a Kotlin data class.
+
+**Interview takeaway:** Encapsulating state transitions prevents invalid business states and avoids scattering validation logic across services and controllers.
+
+### 2. Immutability vs Persistence
+
+Creating an updated immutable object does not automatically update stored data.
+
+```java
+SimOrder updated = order.markInventoryReserved();
+repository.save(updated);
+```
+
+- `updated` is a new object.
+- The original record remains unchanged.
+- The repository must store the new version.
+
+**Key learning:** Object immutability and persistence are separate concerns.
+
+---
+
+## Sprint 1 — Custom Exceptions and HTTP Error Handling
+
+### 1. Custom Runtime Exceptions
+
+Custom exceptions represent specific application or business failures.
+
+```java
+public class InvalidOrderStateTransitionException
+        extends RuntimeException {
+
+    public InvalidOrderStateTransitionException(String message) {
+        super(message);
+    }
+}
+```
+
+- `RuntimeException` is unchecked.
+- Java does not require unchecked exceptions to be declared with `throws`.
+- Custom exception types allow precise error handling.
+- Avoid using generic exceptions when callers need to distinguish business failures.
+
+**Kotlin comparison:** Kotlin exceptions are also unchecked.
+
+### 2. HTTP 409 Conflict
+
+HTTP 409 indicates that a request conflicts with the current state of a resource.
+
+Example: attempting a state transition that is not permitted from the current status.
+
+| Status | Meaning |
+|---|---|
+| 400 | Invalid request |
+| 404 | Resource not found |
+| 409 | Conflict with current resource state |
+| 500 | Unexpected server failure |
+
+**Interview takeaway:** A business-state conflict should not normally be reported as an unexpected server error.
+
+### 3. Handling Multiple Exceptions
+
+`@ExceptionHandler` can handle more than one exception type.
+
+```java
+@ExceptionHandler({
+    InvalidOrderStateTransitionException.class,
+    InsufficientInventoryException.class
+})
+public ResponseEntity<?> handleConflict(RuntimeException ex) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(Map.of("message", ex.getMessage()));
+}
+```
+
+- One handler can support multiple exception classes.
+- Group exceptions when they share HTTP response semantics.
+- Avoid mapping every `RuntimeException` to a business error, as this can hide programming defects.
+
+**Interview takeaway:** Exception handlers should be organized around meaningful error semantics, not necessarily one method per exception class.
+
+---
+
+## Sprint 1 — Mockito and Spring Test Annotations
+
+### @Mock vs @InjectMocks vs @MockitoBean
+
+| Annotation | Purpose | Spring context? |
+|---|---|---|
+| `@Mock` | Creates a Mockito mock | No |
+| `@InjectMocks` | Injects available mocks into the object under test | No |
+| `@MockitoBean` | Overrides a bean with a Mockito mock in the Spring test context | Yes |
+
+**Plain Mockito unit test:**
+
+```text
+@InjectMocks OrderService
+          |
+          v
+    @Mock Repository
+```
+
+**Spring MVC test:**
+
+```text
+@WebMvcTest
+     |
+     v
+Real Controller
+     |
+     v
+@MockitoBean Service
+```
+
+- `@InjectMocks` does not create a Spring bean.
+- `@MockitoBean` is useful when testing Spring-managed components.
+- Mocking a dependency verifies isolated behaviour, not the real dependency's implementation.
+
+**Interview takeaway:** Choose mocking annotations based on whether the test uses Mockito alone or a Spring application context.
+
+---
+
+## Sprint 1 — JUnit Exception Assertions
+
+### assertThrows()
+
+`assertThrows()` verifies that executing a block produces an expected exception type.
+
+```java
+assertThrows(
+    InvalidOrderStateTransitionException.class,
+    () -> service.reserveInventory(orderId)
+);
+```
+
+- The second argument is a lambda executed by JUnit.
+- The test fails if no exception is thrown.
+- It also fails if an incompatible exception type is thrown.
+- `assertThrows()` accepts the specified exception type or a subclass.
+
+**Interview takeaway:** Test failure scenarios explicitly, not just successful results.
+
+---
+
+## Sprint 1 — Concurrency and Atomicity
+
+### Thread Safety vs Atomic Business Operations
+
+`ConcurrentHashMap` makes individual operations such as `get()` and `put()` thread-safe.
+
+However:
+
+```text
+Read → Validate → Update → Save
+```
+
+is not automatically atomic.
+
+Two threads can read the same initial state and independently attempt updates.
+
+**Key distinction:**
+
+- **Thread-safe operation:** An individual operation can be performed safely across threads.
+- **Atomic operation:** The operation completes as one indivisible unit from the perspective of other threads.
+
+Database transactions alone do not automatically prevent every race condition; appropriate locking, constraints, or concurrency-control strategies may also be required.
+
+**Interview takeaway:** Thread-safe collections do not automatically guarantee business-level consistency.
