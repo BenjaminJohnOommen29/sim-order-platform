@@ -46,4 +46,43 @@ public class OrderController {
                 .map(ResponseEntity::ok)
                 .orElseGet(()-> ResponseEntity.notFound().build());
     }
+
+    @PostMapping("/{orderId}/confirm")
+    public ResponseEntity<OrderResponse> confirmOrder(@PathVariable String orderId) {
+
+        return orderService.confirmOrder(orderId)
+                .map(ResponseEntity::ok)
+                .orElseGet(()-> ResponseEntity.notFound().build());
+    }
+
+
+    @PostMapping("/{orderId}/dispatch")
+    public ResponseEntity<OrderResponse> dispatchOrder(
+            @PathVariable String orderId) {
+
+        return orderService.dispatchOrder(orderId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+
+    @PostMapping("/{orderId}/activate")
+    public ResponseEntity<OrderResponse> activateOrder(
+            @PathVariable String orderId) {
+
+        return orderService.activateOrder(orderId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+
+    @PostMapping("/{orderId}/reject")
+    public ResponseEntity<OrderResponse> rejectOrder(
+            @PathVariable String orderId) {
+
+        return orderService.rejectOrder(orderId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
 }

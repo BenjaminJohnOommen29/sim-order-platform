@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 public class OrderService {
@@ -53,12 +54,36 @@ public class OrderService {
 
 
     public Optional<OrderResponse> reserveInventory(String orderId) {
+        return transitionOrder(orderId, SimOrder::markInventoryReserved);
+        //SimOrder::markInventoryReserved == order -> order.markInventoryReserved()
+    }
+
+    public Optional<OrderResponse> confirmOrder(String orderId) {
+        return transitionOrder(orderId, SimOrder::markConfirmed);
+    }
+
+
+    public Optional<OrderResponse> dispatchOrder(String orderId) {
+        return transitionOrder(orderId, SimOrder::markDispatched);
+    }
+
+
+    public Optional<OrderResponse> activateOrder(String orderId) {
+        return transitionOrder(orderId, SimOrder::markActivated);
+    }
+
+    public Optional<OrderResponse> rejectOrder(String orderId) {
+        return transitionOrder(orderId, SimOrder::markRejected);
+    }
+
+
+    //---------------------------------------------------------------//
+
+    private Optional<OrderResponse> transitionOrder(String orderId, Function<SimOrder,SimOrder> transition){
         return orderRepository.findById(orderId)
                 .map(order -> {
-                    SimOrder updatedOrder = order.markInventoryReserved();
-
+                    SimOrder updatedOrder =  transition.apply(order);
                     orderRepository.save(updatedOrder);
-                    //Our ConcurrentHashMap repository replaces the value stored under the same order ID when we call save(updatedOrder).
 
                     return new OrderResponse(
                             updatedOrder.orderId(),
@@ -69,5 +94,6 @@ public class OrderService {
                     );
                 });
     }
+
 
 }
