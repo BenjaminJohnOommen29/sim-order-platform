@@ -15,7 +15,7 @@ public class OrderController {
 
     private final OrderService orderService; // Only OrderController can access this field - Encapsulation & cannot be reassigned.
 
-    public OrderController(OrderService orderService){
+    public OrderController(OrderService orderService) {
         this.orderService = orderService;
     }
 
@@ -32,7 +32,7 @@ public class OrderController {
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrderById(
             @PathVariable String orderId
-    ){
+    ) {
         return orderService.getOrderById(orderId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -44,7 +44,7 @@ public class OrderController {
 
         return orderService.reserveInventory(orderId)
                 .map(ResponseEntity::ok)
-                .orElseGet(()-> ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{orderId}/confirm")
@@ -52,7 +52,7 @@ public class OrderController {
 
         return orderService.confirmOrder(orderId)
                 .map(ResponseEntity::ok)
-                .orElseGet(()-> ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
 

@@ -530,3 +530,86 @@ Two threads can read the same initial state and independently attempt updates.
 Database transactions alone do not automatically prevent every race condition; appropriate locking, constraints, or concurrency-control strategies may also be required.
 
 **Interview takeaway:** Thread-safe collections do not automatically guarantee business-level consistency.
+
+
+## Java & Spring — Learning Checkpoint: State Transitions and Testing
+
+### 1. Java `Function<T, R>`
+- Represents a function that takes `T` and returns `R`.
+- Useful when the workflow stays the same but one operation changes.
+
+```java
+Function<SimOrder, SimOrder> transition;
+transition.apply(order);
+```
+
+Kotlin equivalent: `(SimOrder) -> SimOrder`
+
+### 2. Method References (`::`)
+- Pass an existing method as a function without executing it immediately.
+
+```java
+SimOrder::markConfirmed
+// Equivalent to:
+order -> order.markConfirmed()
+```
+
+- The method runs when `transition.apply(order)` is called.
+
+### 3. DRY vs YAGNI
+- **DRY:** Avoid duplicating logic that must stay consistent.
+- **YAGNI:** Don't build abstractions before they're needed.
+- Extract repeated workflows into private helpers first.
+- Create shared components only when multiple consumers genuinely need them.
+
+### 4. Variable Scope
+- Prefer local variables unless multiple methods need access.
+- Smaller scope means less unnecessary shared state.
+
+```java
+private OrderService service;
+
+@BeforeEach
+void setUp() {
+    var repository = new InMemoryOrderRepository();
+    service = new OrderService(repository);
+}
+```
+
+### 5. JUnit `@BeforeEach`
+- Runs before every test method.
+- Creates fresh test state and avoids test-order dependencies.
+- Use helper methods for repeated actions; `@BeforeEach` for common setup.
+
+**Rule:** Reuse setup logic, not mutable test state.
+
+### 6. Testing Persisted State
+- A correct return value doesn't guarantee the update was saved.
+- Verify the operation's result **and** retrieve the value again.
+
+```java
+assertEquals(CONFIRMED, service.confirmOrder(id).orElseThrow().status());
+assertEquals(CONFIRMED, service.getOrderById(id).orElseThrow().status());
+```
+
+### 7. State Machine & Business Invariants
+- A state machine defines valid changes between states.
+- Enforce rules inside domain methods, not controllers.
+- Immutable objects return a new instance instead of changing themselves.
+
+Example: `CREATED → CONFIRMED` is forbidden if inventory must be reserved first.
+
+### 8. State Validation vs Idempotency
+- **State validation:** Is this operation allowed right now?
+- **Idempotency:** Can it be retried without additional unintended effects?
+
+Example:
+- Second confirmation returning `409` = invalid transition.
+- Repeated confirmation returning the same result without extra effects = idempotent behavior.
+
+### 9. Thread Safety vs Atomicity
+- `ConcurrentHashMap` protects individual map operations.
+- It does **not** make `read → validate → save` one atomic operation.
+- Concurrent requests may both pass the same validation.
+
+**Solution:** Use appropriate database transactions and concurrency control.
